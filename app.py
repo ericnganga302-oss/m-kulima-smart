@@ -1,179 +1,112 @@
-# app.py
 import streamlit as st
-import pandas as pd
-import plotly.express as px
 from datetime import date
 
-# -----------------------------
-# PAGE CONFIG
-# -----------------------------
-st.set_page_config(
-    page_title="M-Kulima Smart",
-    page_icon="🌱",
-    layout="wide",
+# -------------------- ENGINE IMPORTS --------------------
+from smart.engine.data_loader import (
+    add_animal,
+    add_weight,
+    add_health
 )
 
-# -----------------------------
-# GLOBAL STYLES (Dark + Farm)
-# -----------------------------
-st.markdown("""
-<style>
-body {
-    background-color: #0e1117;
-}
-.metric-card {
-    background-color: #161b22;
-    padding: 20px;
-    border-radius: 16px;
-    box-shadow: 0 0 8px rgba(0,255,150,0.15);
-}
-.metric-title {
-    color: #9be7c4;
-    font-size: 14px;
-}
-.metric-value {
-    font-size: 28px;
-    font-weight: bold;
-    color: #e6fff4;
-}
-.badge-green {color:#00ff9c;}
-.badge-yellow {color:#ffd166;}
-.badge-red {color:#ff4d4d;}
-</style>
-""", unsafe_allow_html=True)
+from smart.engine.inference import (
+    forecast_growth,
+    health_status
+)
 
-# -----------------------------
-# MOCK SAFE DATA (Step 2 will replace)
-# -----------------------------
-def load_weights():
-    return pd.DataFrame({
-        "date": pd.date_range(end=date.today(), periods=10),
-        "weight": [220, 222, 225, 227, 229, 228, 230, 231, 233, 235]
-    })
+# -------------------- PAGE CONFIG --------------------
+st.set_page_config(
+    page_title="M-Kulima Smart",
+    layout="wide"
+)
 
-def load_health():
-    return {
-        "status": "Healthy",
-        "temperature": 38.4,
-        "activity": "Normal"
-    }
+st.title("🐄 M-Kulima Smart Livestock Intelligence")
 
-# -----------------------------
-# SIDEBAR NAVIGATION
-# -----------------------------
-st.sidebar.title("🌱 M-Kulima Smart")
-st.sidebar.caption("Smart Livestock Monitoring")
+# -------------------- SIDEBAR NAV --------------------
+nav = st.sidebar.radio(
+    "Navigation",
+    [
+        "Animal Registration",
+        "Weight Tracking",
+        "Health Monitoring",
+        "Growth Prediction"
+    ]
+)
 
-NAV_PAGES = {
-    "📊 Dashboard": "dashboard",
-    "🐄 Animal Health": "health",
-    "⚖️ Weight Tracking": "weight",
-    "📥 Data Ingestion": "ingest",
-    "⚙️ Admin": "admin"
-}
+# -------------------- SHARED INPUT --------------------
+st.sidebar.divider()
+animal_id = st.sidebar.text_input("Animal ID", value="AEG-001")
 
-selection = st.sidebar.radio("Navigate", list(NAV_PAGES.keys()))
+# =====================================================
+# 🟢 1. ANIMAL REGISTRATION
+# =====================================================
+if nav == "Animal Registration":
+    st.header("📋 Register Animal")
 
-# -----------------------------
-# DASHBOARD PAGE
-# -----------------------------
-def page_dashboard():
-    st.title("📊 Farm Overview")
+    species = st.selectbox("Species", ["Cattle", "Goat", "Sheep", "Poultry"])
+    dob = st.date_input("Date of Birth", value=date(2024, 1, 1))
 
-    health = load_health()
-    weights = load_weights()
+    if st.button("Register Animal"):
+        try:
+            add_animal(animal_id, species, str(dob))
+            st.success(f"Animal {animal_id} registered successfully")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-    col1, col2, col3 = st.columns(3)
+# =====================================================
+# 🟢 2. WEIGHT TRACKING (STEP 2.3 ✔)
+# =====================================================
+elif nav == "Weight Tracking":
+    st.header("⚖️ Record Weight")
 
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">Health Status</div>
-            <div class="metric-value badge-green">🟢 {health['status']}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">Temperature</div>
-            <div class="metric-value">{health['temperature']} °C</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">Latest Weight</div>
-            <div class="metric-value">{weights['weight'].iloc[-1]} kg</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("### 📈 Weight Trend")
-    fig = px.line(weights, x="date", y="weight", markers=True)
-    fig.update_layout(
-        template="plotly_dark",
-        height=350
+    weight = st.number_input(
+        "Current Weight (kg)",
+        min_value=0.0,
+        step=0.5
     )
-    st.plotly_chart(fig, use_container_width=True)
 
-# -----------------------------
-# HEALTH PAGE
-# -----------------------------
-def page_health():
-    st.title("🐄 Animal Health Monitor")
+    if st.button("Save Weight"):
+        try:
+            add_weight(animal_id, weight)
+            st.success("Weight saved successfully")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-    health = load_health()
+# =====================================================
+# 🟢 3. HEALTH MONITORING (STEP 2.3 ✔)
+# =====================================================
+elif nav == "Health Monitoring":
+    st.header("🌡 Health Monitoring")
 
-    if health["status"] == "Healthy":
-        st.success("🟢 Animal is healthy")
-    else:
-        st.warning("🟡 Attention required")
+    temperature = st.slider("Body Temperature (°C)", 35.0, 42.0, 38.5)
+    activity = st.slider("Activity Level", 0, 100, 60)
 
-    st.metric("Temperature", f"{health['temperature']} °C")
-    st.metric("Activity", health["activity"])
+    if st.button("Save Health Data"):
+        try:
+            add_health(animal_id, temperature, activity)
+            st.success("Health data recorded")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-# -----------------------------
-# WEIGHT PAGE
-# -----------------------------
-def page_weight():
-    st.title("⚖️ Weight Monitoring")
+    st.divider()
 
-    weights = load_weights()
-    st.dataframe(weights, use_container_width=True)
+    try:
+        status = health_status(animal_id)
+        st.subheader(f"Health Status: {status}")
+    except Exception as e:
+        st.warning("Not enough data for health analysis yet")
 
-# -----------------------------
-# INGEST PAGE
-# -----------------------------
-def page_ingest():
-    st.title("📥 Data Ingestion")
-    st.info("CSV upload & auto-processing (Step 2 upgrade)")
+# =====================================================
+# 🟢 4. GROWTH PREDICTION (REAL DATA)
+# =====================================================
+elif nav == "Growth Prediction":
+    st.header("📈 Growth Forecast")
 
-    file = st.file_uploader("Upload CSV", type=["csv"])
-    if file:
-        df = pd.read_csv(file)
-        st.success("Data loaded successfully")
-        st.dataframe(df)
+    days_ahead = st.slider("Forecast Days", 7, 90, 30)
 
-# -----------------------------
-# ADMIN PAGE
-# -----------------------------
-def page_admin():
-    st.title("⚙️ Admin Panel")
-    st.warning("Admin features locked (Step 3: Authentication)")
-
-    if st.button("Retrain Model"):
-        st.success("Model retraining triggered (placeholder)")
-
-# -----------------------------
-# ROUTER (NO BUGS)
-# -----------------------------
-ROUTES = {
-    "dashboard": page_dashboard,
-    "health": page_health,
-    "weight": page_weight,
-    "ingest": page_ingest,
-    "admin": page_admin
-}
-
-ROUTES[NAV_PAGES[selection]]()
+    if st.button("Run Forecast"):
+        try:
+            predictions = forecast_growth(animal_id, days_ahead)
+            st.line_chart(predictions)
+            st.success("Forecast generated from real weight history")
+        except Exception as e:
+            st.error("Not enough weight data to forecast yet")

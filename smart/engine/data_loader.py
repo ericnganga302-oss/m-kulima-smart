@@ -1,162 +1,104 @@
 import sqlite3
 from pathlib import Path
 import pandas as pd
+from datetime import datetime
 
-# -------------------------------------------------
-# DATABASE SETUP
-# -------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parents[1]
-DB_PATH = BASE_DIR / "data" / "mkulima.db"
+DB_PATH = BASE_DIR / "data" / "app_data.db"
 
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+def get_conn():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-cursor = conn.cursor()
-
-
-# -------------------------------------------------
-# TABLE INITIALIZATION
-# -------------------------------------------------
 def init_db():
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS animals (
-            animal_id TEXT PRIMARY KEY,
-            species TEXT NOT NULL,
-            birth_date TEXT NOT NULL
-        )
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS animals (
+        animal_id TEXT PRIMARY KEY,
+        species TEXT,
+        birth_date TEXT
+    )
     """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS weights (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            animal_id TEXT NOT NULL,
-            weight REAL NOT NULL,
-            date TEXT NOT NULL,
-            FOREIGN KEY (animal_id) REFERENCES animals (animal_id)
-        )
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        animal_id TEXT,
+        weight REAL,
+        date TEXT
+    )
     """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sensors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            animal_id TEXT NOT NULL,
-            temperature REAL NOT NULL,
-            activity INTEGER NOT NULL,
-            timestamp TEXT NOT NULL,
-            FOREIGN KEY (animal_id) REFERENCES animals (animal_id)
-        )
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS health (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        animal_id TEXT,
+        temperature REAL,
+        activity INTEGER,
+        date TEXT
+    )
     """)
 
     conn.commit()
+    conn.close()
 
-
-# Initialize immediately
-init_db()
-
-
-# -------------------------------------------------
-# ANIMAL OPERATIONS
-# -------------------------------------------------
-def animal_exists(animal_id):
-    cursor.execute(
-        "SELECT 1 FROM animals WHERE animal_id = ?",
-        (animal_id,)
-    )
-    return cursor.fetchone() is not None
-
+# ---------- INGESTION ----------
 
 def add_animal(animal_id, species, birth_date):
-    if animal_exists(animal_id):
-        return False
-
-    cursor.execute("""
-        INSERT INTO animals (animal_id, species, birth_date)
-        VALUES (?, ?, ?)
-    """, (animal_id, species, birth_date))
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT OR IGNORE INTO animals VALUES (?, ?, ?)",
+        (animal_id, species, birth_date)
+    )
     conn.commit()
-    return True
+    conn.close()
 
-
-
-# -------------------------------------------------
-# WEIGHT DATA
-# -------------------------------------------------
-def add_weight_record(animal_id, weight, date):
-    if not animal_exists(animal_id):
-        raise ValueError("Animal does not exist")
-
-    cursor.execute("""
-        INSERT INTO weights (animal_id, weight, date)
-        VALUES (?, ?, ?)
-    """, (animal_id, float(weight), date))
+def add_weight(animal_id, weight):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO weights (animal_id, weight, date) VALUES (?, ?, ?)",
+        (animal_id, weight, datetime.now().isoformat())
+    )
     conn.commit()
+    conn.close()
 
+def add_health(animal_id, temperature, activity):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO health (animal_id, temperature, activity, date) VALUES (?, ?, ?, ?)",
+        (animal_id, temperature, activity, datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+# ---------- LOADERS ----------
 
 def load_weight_history(animal_id):
-    cursor.execute("""
-        SELECT weight
-        FROM weights
-        WHERE animal_id = ?
-        ORDER BY date ASC
-    """, (animal_id,))
+    conn = get_conn()
+    df = pd.read_sql(
+        "SELECT weight, date FROM weights WHERE animal_id=? ORDER BY date",
+        conn,
+        params=(animal_id,)
+    )
+    conn.close()
+    return df
 
-    rows = cursor.fetchall()
-    return [row[0] for row in rows]
-
-
-# -------------------------------------------------
-# SENSOR DATA
-# -------------------------------------------------
-def add_sensor_record(animal_id, temperature, activity, timestamp):
-    if not animal_exists(animal_id):
-        raise ValueError("Animal does not exist")
-
-    cursor.execute("""
-        INSERT INTO sensors (animal_id, temperature, activity, timestamp)
-        VALUES (?, ?, ?, ?)
-    """, (animal_id, float(temperature), int(activity), timestamp))
-    conn.commit()
-
-
-def load_sensor_history(animal_id, limit=50):
-    cursor.execute("""
-        SELECT temperature, activity
-        FROM sensors
-        WHERE animal_id = ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-    """, (animal_id, limit))
-
-    return cursor.fetchall()
-
-
-# -------------------------------------------------
-# BULK CSV HELPERS (OPTIONAL BUT SAFE)
-# -------------------------------------------------
-def ingest_weights_dataframe(df):
-    required = {"animal_id", "weight", "date"}
-    if not required.issubset(df.columns):
-        raise ValueError("Missing required columns")
-
-    for _, row in df.iterrows():
-        if animal_exists(row["animal_id"]):
-            add_weight_record(
-                row["animal_id"],
-                row["weight"],
-                row["date"]
-            )
-
-
-def ingest_sensors_dataframe(df):
-    required = {"animal_id", "temperature", "activity", "timestamp"}
-    if not required.issubset(df.columns):
-        raise ValueError("Missing required columns")
-
-    for _, row in df.iterrows():
-        if animal_exists(row["animal_id"]):
-            add_sensor_record(
-                row["animal_id"],
-                row["temperature"],
-                row["activity"],
-                row["timestamp"]
-            )
+def load_health_latest(animal_id):
+    conn = get_conn()
+    df = pd.read_sql(
+        """
+        SELECT temperature, activity, date
+        FROM health
+        WHERE animal_id=?
+        ORDER BY date DESC LIMIT 1
+        """,
+        conn,
+        params=(animal_id,)
+    )
+    conn.close()
+    return df
