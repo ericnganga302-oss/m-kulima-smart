@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+scikit-learn
+plotly
+sqlite3
+joblib
+apscheduler

@@ -1,0 +1,5 @@
+animal_id,temperature,activity,feed_intake
+AEG-001,38.5,120,10
+AEG-001,38.6,118,11
+AEG-001,38.4,125,10
+AEG-001,41.2,30,2
