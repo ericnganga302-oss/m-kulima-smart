@@ -1,0 +1,25 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual env
+venv/
+.env/
+
+# Databases
+*.db
+*.sqlite3
+
+# ML artifacts
+*.joblib
+*.pkl
+
+# Streamlit
+.streamlit/
+
+# IDE
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
