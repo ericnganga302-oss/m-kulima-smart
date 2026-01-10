@@ -1,8 +1,8 @@
 streamlit
 pandas
-numpy
-sqlalchemy
-scikit-learn
-apscheduler
-joblib
-cryptography
+plotly
+st-supabase-connection
+SpeechRecognition
+supabase
+realtime
+postgrest
