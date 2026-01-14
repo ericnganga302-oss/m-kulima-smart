@@ -6,3 +6,5 @@ SpeechRecognition
 supabase
 joblib
 scikit-learn
+numpy
+apscheduler
